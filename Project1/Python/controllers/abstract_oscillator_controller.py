@@ -30,24 +30,19 @@ class AbstractOscillatorController:
         self.dstate = np.zeros([self.n_eq])  # derivative state
 
         # State index
-        self.oscillator_phase_l = np.arange(0, self.pars.n_joints)
-        self.oscillator_phase_r = self.pars.n_joints + \
-            np.arange(0, self.pars.n_joints)
+        self.oscillator_phase_l = np.arange(0, self.pars.n_joints) * 2
+        self.oscillator_phase_r = np.arange(0, self.pars.n_joints) * 2 + 1
         self.oscillator_phase_all = np.arange(0, 2*self.pars.n_joints)
-        self.oscillator_amplitude_l = self.pars.n_joints * \
-            2 + np.arange(0, self.pars.n_joints)
-        self.oscillator_amplitude_r = self.pars.n_joints * \
-            3 + np.arange(0, self.pars.n_joints)
-        self.oscillator_amplitude_all = self.pars.n_joints * \
-            2 + np.arange(0, 2*self.pars.n_joints)
+        self.oscillator_amplitude_l = self.pars.n_joints * 2 + np.arange(0, self.pars.n_joints) * 2
+        self.oscillator_amplitude_r = self.pars.n_joints * 2 + np.arange(0, self.pars.n_joints) * 2 + 1
+        self.oscillator_amplitude_all = self.pars.n_joints * 2 + np.arange(0, 2*self.pars.n_joints)
 
         # Initial state
         if self.pars.initial_phases is None:
-            self.state[0, :self.pars.n_joints] = 1 * \
+            self.state[0, 0:2*self.pars.n_joints-1:2] = 1 * \
                 np.linspace(2*np.pi, 0, self.pars.n_joints)
-            self.state[0, self.pars.n_joints:2 *
-                       self.pars.n_joints] = np.linspace(np.pi, -
-                                                         np.pi, self.pars.n_joints)
+            self.state[0, 1:2*self.pars.n_joints:2] = np.linspace(
+                np.pi, -np.pi, self.pars.n_joints)
         else:
             self.state[0, :2*self.pars.n_joints] = self.pars.initial_phases
 
