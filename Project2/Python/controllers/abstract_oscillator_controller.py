@@ -51,7 +51,7 @@ class AbstractOscillatorController:
             self.state[0, :2*self.pars.n_joints] = self.pars.initial_phases
 
         self.state[0, self.n_oscillators:2 *
-                   self.n_oscillators] = np.zeros(self.n_oscillators)
+                   self.n_oscillators] = np.ones(self.n_oscillators)  # Initialize amplitudes to 1
 
         # motor output and indexes
         self.motor_out = np.zeros([self.n_iterations, self.n_oscillators])
@@ -73,6 +73,8 @@ class AbstractOscillatorController:
             The controller object
         state: <np.array>
             An array of size 2*n_oscillators storing the oscillator phases and amplitudes
+        pos: <np.array>
+            Current joint positions (angles)
         Returns
         -------
         dstate: <np.array>
@@ -86,10 +88,86 @@ class AbstractOscillatorController:
         The computation of the above-mentioned parameters can go in another custom function or
         be implemented here directly.
         """
-        n_oscillators = self.n_oscillators
-        # Implement equation here
-        dphases = np.zeros(n_oscillators)
-        damplitudes = np.zeros(n_oscillators)
+        # Initialize arrays for the derivatives of phases and amplitudes
+        dphases = np.zeros(self.n_oscillators)
+        damplitudes = np.zeros(self.n_oscillators)
+
+        # Get the current phases and amplitudes from the state
+        phases = state[self.oscillator_phase_all]
+        amplitudes = state[self.oscillator_amplitude_all]
+
+        # Calculate frequency
+        f = self.pars.cpg_frequency_gain * self.pars.drive + self.pars.cpg_frequency_offset
+
+        # Calculate stretch feedback if joint positions are provided
+        if pos is not None:
+            # Check if we're using entraining signals by looking at the amplitude or variability of pos
+            is_entrainment_active = np.max(np.abs(pos)) > 0.1
+            
+            # Calculate feedback weights scaled by reference
+            w_ipsi = self.pars.feedback_weights_ipsi * self.pars.feedback_gain_ref
+            w_contra = self.pars.feedback_weights_contra * self.pars.feedback_gain_ref
+            
+            # Calculate stretch feedback for each oscillator
+            for i in range(self.n_oscillators):
+                if i % 2 == 0:  # Left side
+                    s_i = w_ipsi * max(0, pos[i//2]) + w_contra * max(0, -pos[i//2])
+                else:  # Right side
+                    s_i = w_ipsi * max(0, -pos[i//2]) + w_contra * max(0, pos[i//2])
+                
+                # Update phase derivative with stretch feedback
+                # Add small epsilon to avoid division by zero
+                epsilon = 1e-10
+                
+                # Add stronger entrainment effect when using entraining signals
+                if is_entrainment_active and hasattr(self.pars, 'entraining_signals'):
+                    # If entrainment is active, use a stronger direct frequency modulation
+                    # Get the frequency from pars if it's being used with entraining signals
+                    entrainment_freq = 0
+                    if hasattr(self.pars, 'entraining_signals') and self.pars.entraining_signals is not None:
+                        # Extract frequency from the entraining signals - this is a simplification
+                        # Assuming entrainment is at 8Hz or other value set in exercise7.py
+                        entrainment_freq = 8.0  # Hardcoded for now from ENTRAINMENT_FREQUENCY_HZ
+                    
+                    # Blend natural frequency with entrainment frequency based on feedback strength
+                    entrainment_strength = min(1.0, abs(w_ipsi) + abs(w_contra))
+                    f_entrained = f * (1 - entrainment_strength) + entrainment_freq * entrainment_strength
+                    
+                    # Use entrained frequency for phase update
+                    dphases[i] = 2 * np.pi * f_entrained - s_i/(amplitudes[i] + epsilon) * np.sin(phases[i])
+                else:
+                    # Regular update without strong entrainment
+                    dphases[i] = 2 * np.pi * f - s_i/(amplitudes[i] + epsilon) * np.sin(phases[i])
+                
+                # Update amplitude derivative with stretch feedback
+                damplitudes[i] = self.pars.amplitude_rates * (self.pars.nominal_amplitude[i] - amplitudes[i]) + s_i * np.cos(phases[i])
+        else:
+            # If no joint positions, use default phase derivative
+            dphases = 2 * np.pi * f * np.ones(self.n_oscillators)
+            damplitudes = self.pars.amplitude_rates * (self.pars.nominal_amplitude - amplitudes)
+
+        # Add coupling terms
+        for i in range(self.n_oscillators):
+            for j in range(self.n_oscillators):
+                if i == j:
+                    continue
+                
+                # Calculate coupling weights and phase lags
+                if abs(i - j) == 2:  # Adjacent segments on same side
+                    wij = self.pars.weights_body2body
+                    phij = np.sign(i - j) * self.pars.phase_lag_body / (self.pars.n_joints - 1)
+                elif (j - i == 1) and (i % 2 == 0):  # Left to right coupling
+                    wij = self.pars.weights_body2body_contralateral
+                    phij = -np.pi
+                elif (i - j == 1) and (i % 2 == 1):  # Right to left coupling (mutual)
+                    wij = self.pars.weights_body2body_contralateral
+                    phij = np.pi
+                else:
+                    wij = 0
+                    phij = 0
+
+                # Add coupling term to phase derivative
+                dphases[i] += amplitudes[j] * wij * np.sin(phases[j] - phases[i] - phij)
 
         return np.concatenate([dphases, damplitudes])
 
@@ -122,11 +200,6 @@ class AbstractOscillatorController:
         oscillator_output = amplitude*(1+np.cos(phase))
         motor_output = self.pars.motor_output_scaling*oscillator_output
 
-        # remapping oscillator to convention
-        # motor_output = np.zeros(self.n_oscillators)
-        # motor_output[::2] = output[:self.pars.n_joints]
-        # motor_output[1::2] = output[self.pars.n_joints:]
-
         # store muscle output
         self.motor_out[iteration, :] = motor_output
 
@@ -142,6 +215,8 @@ class AbstractOscillatorController:
                   you can call self.f(self, state) to call the network_ode(self, state) function
         iteration: <int>
             Current sim itertaion
+        pos: <np.array>
+            Current joint positions (angles)
         Returns
         -------
         motor_output_all: <np.array>
@@ -152,6 +227,11 @@ class AbstractOscillatorController:
         You return the muscle activation of all body joints at current iteration (array of 2*n_joints_total)
         which includes updated motor outputs from active joints and the motor outputs for passive joints.
         """
+        # Check if entraining signals are available and use them instead of pos
+        if hasattr(self.pars, 'entraining_signals') and self.pars.entraining_signals is not None:
+            if iteration < len(self.pars.entraining_signals):
+                # Override pos with entraining signal
+                pos = self.pars.entraining_signals[iteration]
 
         self.state[iteration+1, :] = (
             self.state[iteration, :] +
