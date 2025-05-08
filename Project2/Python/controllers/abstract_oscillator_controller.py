@@ -3,7 +3,7 @@
 import numpy as np
 import scipy.stats as ss
 from farms_core import pylog
-
+from util.zebrafish_hyperparameters import define_hyperparameters
 
 class AbstractOscillatorController:
     """zebrafish controller"""
@@ -16,6 +16,7 @@ class AbstractOscillatorController:
 
         # Simulation parameters
         self.pars = pars
+        self.ws_ref = define_hyperparameters()["ws_ref"]
         self.n_iterations = pars.n_iterations
         self.timestep = pars.timestep
         self.times = np.linspace(
@@ -58,6 +59,20 @@ class AbstractOscillatorController:
         self.motor_l = 2*np.arange(0, self.pars.n_joints)
         self.motor_r = self.motor_l + 1
 
+        # Nominal amplitudes
+        if np.isscalar(self.pars.cpg_amplitude_gain):
+            self.pars.cpg_amplitude_gain = self.pars.cpg_amplitude_gain * np.ones(self.pars.n_joints)
+        
+        # W_ipsi and W_contra (OONLY WORKS FOR w_contra and w_ipsi being the same for all joints)
+        self.W_ipsi = self.ws_ref
+        self.W_contra = self.ws_ref*self.pars.feedback_weights_contra
+        self.W_ipsi = self.ws_ref*self.pars.feedback_weights_ipsi
+
+        self.nominal_amplitude = np.zeros(self.n_oscillators)
+        for i in range(self.n_oscillators):
+            joint_idx = i // 2
+            self.nominal_amplitude[i] = self.pars.cpg_amplitude_gain[joint_idx] * self.pars.drive
+
         # initialize ode solver
         self.f = self.network_ode
         self.step = self.step_euler
@@ -86,10 +101,45 @@ class AbstractOscillatorController:
         The computation of the above-mentioned parameters can go in another custom function or
         be implemented here directly.
         """
-        n_oscillators = self.n_oscillators
-        # Implement equation here
-        dphases = np.zeros(n_oscillators)
-        damplitudes = np.zeros(n_oscillators)
+        # Initialize arrays for the derivatives of phases and amplitudes
+        dphases = np.zeros(self.n_oscillators)
+        damplitudes = np.zeros(self.n_oscillators)
+
+        # Get the current phases and amplitudes from the state
+        phases = state[self.oscillator_phase_all]
+        amplitudes = state[self.oscillator_amplitude_all]
+
+        f = self.pars.cpg_frequency_gain * self.pars.drive + self.pars.cpg_frequency_offset
+
+        for i in range(self.n_oscillators):
+            
+            if i % 2 == 0:
+                si = self.W_ipsi*max(0,pos[i//2])+self.W_contra*max(0,-pos[i//2])
+            else:
+                si = self.W_ipsi*max(0,-pos[i//2])+self.W_contra*max(0,pos[i//2]) 
+
+            if amplitudes[i] == 0:
+                amplitudes[i] += 1e-10
+
+            dphases[i] = 2 * np.pi * f - si/amplitudes[i]*np.sin(phases[i])
+
+            for j in range(self.n_oscillators):
+                if abs(i - j) == 2:
+                    wij = self.pars.weights_body2body
+                    phij = np.sign(i - j) * self.pars.phase_lag_body / (self.pars.n_joints - 1)
+                elif (j - i == 1) and (i % 2 == 0):
+                    wij = self.pars.weights_body2body_contralateral
+                    phij = -np.pi
+                elif (i - j == 1) and (i % 2 == 1):
+                    wij = self.pars.weights_body2body_contralateral
+                    phij = np.pi
+                else:   
+                    wij = 0
+                    phij = 0
+
+                dphases[i] += amplitudes[j] * wij * np.sin(phases[j] - phases[i] - phij)
+
+            damplitudes[i] = self.pars.amplitude_rates * (self.nominal_amplitude[i] - amplitudes[i]) + si*np.cos(phases[i])
 
         return np.concatenate([dphases, damplitudes])
 
@@ -119,13 +169,7 @@ class AbstractOscillatorController:
         """
         phase = self.state[iteration, self.oscillator_phase_all]
         amplitude = self.state[iteration, self.oscillator_amplitude_all]
-        oscillator_output = amplitude*(1+np.cos(phase))
-        motor_output = self.pars.motor_output_scaling*oscillator_output
-
-        # remapping oscillator to convention
-        # motor_output = np.zeros(self.n_oscillators)
-        # motor_output[::2] = output[:self.pars.n_joints]
-        # motor_output[1::2] = output[self.pars.n_joints:]
+        motor_output = self.pars.motor_output_scaling*amplitude*(1+np.cos(phase))
 
         # store muscle output
         self.motor_out[iteration, :] = motor_output
@@ -155,7 +199,7 @@ class AbstractOscillatorController:
 
         self.state[iteration+1, :] = (
             self.state[iteration, :] +
-            timestep * self.f(self.state[iteration], pos=pos)
+            timestep * self.f(self.state[iteration,:], pos=pos)
         )
 
         return np.concatenate([
