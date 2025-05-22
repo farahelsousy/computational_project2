@@ -61,7 +61,6 @@ class AbstractOscillatorController:
         if np.isscalar(self.pars.cpg_amplitude_gain):
             self.pars.cpg_amplitude_gain = self.pars.cpg_amplitude_gain * np.ones(self.pars.n_joints)
         
-
         self.nominal_amplitude = np.zeros(self.n_oscillators)
         for i in range(self.n_oscillators):
             joint_idx = i // 2
@@ -100,6 +99,10 @@ class AbstractOscillatorController:
         The computation of the above-mentioned parameters can go in another custom function or
         be implemented here directly.
         """
+        # Check if pos is None, if so, set it to zeros
+        if pos is None:
+            pos = np.zeros(self.pars.n_joints)
+
         # Initialize arrays for the derivatives of phases and amplitudes
         dphases = np.zeros(self.n_oscillators)
         damplitudes = np.zeros(self.n_oscillators)
