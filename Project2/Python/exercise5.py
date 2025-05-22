@@ -4,6 +4,12 @@ import os
 from farms_core import pylog  # fixed import
 from simulation_parameters import SimulationParameters
 from util.run_closed_loop import run_single  # use closed-loop runner
+from util.zebrafish_hyperparameters import define_hyperparameters
+
+# Define general parameters for the simulation
+hyperparameters = define_hyperparameters()
+REF_JOINT_AMP = hyperparameters["REF_JOINT_AMP"]
+ws_ref = hyperparameters["ws_ref"]
 
 def exercise5():
     pylog.info("Ex 5: Closed-loop CPG test")
@@ -21,16 +27,16 @@ def exercise5():
         log_path=log_path,
         simulation_i=0,
         compute_metrics='all',
-        print_metrics=False,
+        print_metrics=True,
         return_network=True,
         headless=False,
         video_record=True,
         video_name='exercise5_cpg_swim',
         video_fps=50,
-        phase_lag_body=2*np.pi,
-        nominal_amplitude=np.ones(2*13)*0.125,
+        phase_lag_body=2*np.pi, 
         feedback_weights_ipsi=0.25,
-        feedback_weights_contra=-0.25
+        feedback_weights_contra=-0.25,
+        ws_ref=ws_ref
     )
 
     try:
@@ -42,16 +48,17 @@ def exercise5():
             
             # Plot oscillator phases
             plt.figure(figsize=(15, 8))
-            for i in range(min(6, controller.oscillator_phase_all.size)):
-                phase = controller.state[:, controller.oscillator_phase_all[i]] % (2 * np.pi)
+            for i in range(min(2, controller.oscillator_phase_all.size)):
+                phase = controller.state[:, controller.oscillator_phase_all[i]]# % (2 * np.pi)
                 plt.plot(controller.times, phase, label=f'Oscillator {i}')
             plt.title('Oscillator Phases')
             plt.xlabel('Time [s]')
             plt.ylabel('Phase [rad]')
             plt.grid(True)
             plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.xlim(0,4)
             plt.tight_layout()
-            plt.savefig(os.path.join(log_path, 'oscillator_phases.png'), dpi=300, bbox_inches='tight')
+            plt.savefig(os.path.join(log_path, 'oscillator_phases.png'), dpi=600, bbox_inches='tight')
             plt.close()
             
             # Plot oscillator amplitudes

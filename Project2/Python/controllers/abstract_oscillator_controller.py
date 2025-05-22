@@ -3,7 +3,6 @@
 import numpy as np
 import scipy.stats as ss
 from farms_core import pylog
-from util.zebrafish_hyperparameters import define_hyperparameters
 
 class AbstractOscillatorController:
     """zebrafish controller"""
@@ -16,7 +15,6 @@ class AbstractOscillatorController:
 
         # Simulation parameters
         self.pars = pars
-        self.ws_ref = define_hyperparameters()["ws_ref"]
         self.n_iterations = pars.n_iterations
         self.timestep = pars.timestep
         self.times = np.linspace(
@@ -63,15 +61,16 @@ class AbstractOscillatorController:
         if np.isscalar(self.pars.cpg_amplitude_gain):
             self.pars.cpg_amplitude_gain = self.pars.cpg_amplitude_gain * np.ones(self.pars.n_joints)
         
-        # W_ipsi and W_contra (OONLY WORKS FOR w_contra and w_ipsi being the same for all joints)
-        self.W_ipsi = self.ws_ref
-        self.W_contra = self.ws_ref*self.pars.feedback_weights_contra
-        self.W_ipsi = self.ws_ref*self.pars.feedback_weights_ipsi
 
         self.nominal_amplitude = np.zeros(self.n_oscillators)
         for i in range(self.n_oscillators):
             joint_idx = i // 2
             self.nominal_amplitude[i] = self.pars.cpg_amplitude_gain[joint_idx] * self.pars.drive
+
+
+        # W_ipsi and W_contra (OONLY WORKS FOR w_contra and w_ipsi being the same for all joints)
+        self.W_contra = self.pars.ws_ref*self.pars.feedback_weights_contra
+        self.W_ipsi = self.pars.ws_ref*self.pars.feedback_weights_ipsi
 
         # initialize ode solver
         self.f = self.network_ode
@@ -112,7 +111,6 @@ class AbstractOscillatorController:
         f = self.pars.cpg_frequency_gain * self.pars.drive + self.pars.cpg_frequency_offset
 
         for i in range(self.n_oscillators):
-            
             if i % 2 == 0:
                 si = self.W_ipsi*max(0,pos[i//2])+self.W_contra*max(0,-pos[i//2])
             else:
@@ -124,6 +122,7 @@ class AbstractOscillatorController:
             dphases[i] = 2 * np.pi * f - si/amplitudes[i]*np.sin(phases[i])
 
             for j in range(self.n_oscillators):
+
                 if abs(i - j) == 2:
                     wij = self.pars.weights_body2body
                     phij = np.sign(i - j) * self.pars.phase_lag_body / (self.pars.n_joints - 1)
@@ -169,7 +168,7 @@ class AbstractOscillatorController:
         """
         phase = self.state[iteration, self.oscillator_phase_all]
         amplitude = self.state[iteration, self.oscillator_amplitude_all]
-        motor_output = self.pars.motor_output_scaling*amplitude*(1+np.cos(phase))
+        motor_output = self.pars.motor_output_scaling*(amplitude*(1+np.cos(phase)))
 
         # store muscle output
         self.motor_out[iteration, :] = motor_output
