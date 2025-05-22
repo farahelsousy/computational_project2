@@ -15,7 +15,54 @@ hyperparameters = define_hyperparameters()
 REF_JOINT_AMP = hyperparameters["REF_JOINT_AMP"]
 ws_ref = hyperparameters["ws_ref"]
 
-def exercise8():
+def plot_E8(n_weights, n_freqs, logdir):
+    # Plot the results of the simulations in exercise 1.4 (2.4)
+    #   n_weights = number of weights
+    #   n_twl = number of TWL
+    #   start_idx = index of the first controller to load
+    #   logdir = directory where the simulation files are stored
+    #   title = title of the plot for saving
+
+    # For each twl-value make a matrix with the speed and CoT as a function of frequnecies
+    mat_diff_actual = np.zeros((n_freqs,n_weights))
+
+    ref_controller = load_object(logdir+"controller"+str(0))
+    if ref_controller.pars.feedback_weights_ipsi != 0:
+        raise Exception("You fucked up, no w=0!")
+
+
+    mat_diff_entrain = np.linspace(3.5, 10, n_freqs) - np.mean(ref_controller.metrics["neur_frequency"])
+    mat_w = np.linspace(0, 10, n_weights)
+
+    title = "entraining_signals"
+
+    for i in range(n_freqs):
+        for j in range(n_weights):
+            # load controller
+            controller = load_object(logdir+"controller"+str(j*n_freqs+i))
+
+            # Get metrics
+            mat_diff_actual[i,j] = np.mean(controller.metrics["neur_frequency"]) - np.mean(ref_controller.metrics["neur_frequency"])
+
+    # Create an array of text containing legends for the twl-values
+    w_legends = [f"w = {value:.2f}" for value in mat_w]
+
+    # Plot the speed and frequency matrices in the same plot. Set x-axis as frequency and y-axis as fwd speed.
+    plt.figure(title, figsize=[10, 10])
+    plt.plot(mat_diff_entrain, mat_diff_actual, marker='o', markersize=5, label=w_legends)
+
+    # Define plot properties
+    plt.figure(title, figsize=[10, 10])
+    plt.xlabel("Entrainment frequency - reference frequency [Hz]")
+    plt.ylabel("Actual frequency - reference frequency [Hz]")
+    plt.legend(loc='upper right')
+    plt.minorticks_on()
+    plt.grid(which='major', color='darkgrey', linestyle='-', linewidth=0.75)
+    plt.grid(which='minor', color='gray', linestyle=':', linewidth=0.5)
+
+    save_figures()
+
+def exercise8(run_sim = True, run_plot = True):
 
     pylog.info("Ex 8")
     log_path = './logs/exercise8/'  # path for logging the simulation data
@@ -26,34 +73,40 @@ def exercise8():
     n_iterations=n_iterations = 10001 
     timestep=timestep = 0.001
 
-    pars_list = [
-            SimulationParameters(
-                simulation_i = i*n_freqs+j,
-                controller="abstract oscillator",
-                compute_metrics="all",
-                n_iterations=n_iterations,
-                timestep=timestep,
-                headless=True,
-                video_record=False,
-                log_path=log_path,
-                return_network=False,
-                print_metrics=False,
-                feedback_weights_ipsi = -weight,
-                feedback_weights_contra = weight,
-                ws_ref = ws_ref,
-                entraining_signals = define_entraining_signals(
-                    n_iterations = n_iterations,
-                    frequency = frequency,
-                    timestep=timestep)
-                )
-            for i, weight in enumerate(np.linspace(0, 2, n_weights))
-            for j, frequency in enumerate(np.linspace(3.5, 10, n_freqs))      
-        ]
-    
-    # Run the simulation
-    controllers = run_multiple(pars_list, num_process=6)
+    if run_sim:
+        pars_list = [
+                SimulationParameters(
+                    simulation_i = j*n_freqs+i,
+                    controller="abstract oscillator",
+                    compute_metrics="all",
+                    n_iterations=n_iterations,
+                    timestep=timestep,
+                    headless=True,
+                    video_record=False,
+                    log_path=log_path,
+                    return_network=False,
+                    print_metrics=False,
+                    feedback_weights_ipsi = -weight,
+                    feedback_weights_contra = weight,
+                    ws_ref = ws_ref,
+                    amplitude_rates = 50,
+                    entraining_signals = define_entraining_signals(
+                        n_iterations = n_iterations,
+                        frequency = frequency,
+                        timestep=timestep)
+                    )
+                for i, frequency in enumerate(np.linspace(3.5, 10, n_freqs))
+                for j, weight in enumerate(np.linspace(0, 10, n_weights))
+            ]
+        
+        # Run the simulation
+        controllers = run_multiple(pars_list, num_process=6)
+
+    if run_plot:
+        plot_E8(n_weights, n_freqs, log_path)
 
 if __name__ == '__main__':
-
-    exercise8()
+    run_sim = True
+    run_plot = True
+    exercise8(run_sim, run_plot)
 
