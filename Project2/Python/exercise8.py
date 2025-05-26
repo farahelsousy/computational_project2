@@ -68,9 +68,9 @@ def exercise8(run_sim = True, run_plot = True):
     log_path = './logs/exercise8/'  # path for logging the simulation data
     os.makedirs(log_path, exist_ok=True)
 
-    n_freqs = 10
-    n_weights = 5
-    n_iterations=n_iterations = 10001 
+    n_freqs = 41
+    n_weights = 11
+    n_iterations=n_iterations = 100001 
     timestep=timestep = 0.001
 
     if run_sim:
@@ -96,7 +96,7 @@ def exercise8(run_sim = True, run_plot = True):
                         timestep=timestep)
                     )
                 for i, frequency in enumerate(np.linspace(3.5, 10, n_freqs))
-                for j, weight in enumerate(np.linspace(0, 10, n_weights))
+                for j, weight in enumerate(np.linspace(0, 4, n_weights))
             ]
         
         # Run the simulation

@@ -13,12 +13,12 @@ from util.zebrafish_hyperparameters import define_hyperparameters
 hyperparameters = define_hyperparameters()
 REF_JOINT_AMP = hyperparameters["REF_JOINT_AMP"]
 ws_ref = hyperparameters["ws_ref"]
-cpg_amplitude_gain = 0.125
-amplitude_rates = 1
-timestep = 0.0001
-n_iterations = 30001
+amplitude_rates = 20
+drive = 10
+timestep = 0.001
+n_iterations = 100001
 
-num_process = 6 # number of processes to run the simulation in parallel
+num_process = 4 # number of processes to run the simulation in parallel
 
 def plot_E6(n_weights, logdir, title):
     # Plot the results of the simulations in exercise 1.4 (2.4)
@@ -96,9 +96,10 @@ def exercise6(run_sim = True, run_plot = True):
                 return_network=False,
                 print_metrics=False,
                 feedback_weights_ipsi = weight,
+                feedback_weights_contra = 0,
                 ws_ref = ws_ref,
-                cpg_amplitude_gain = cpg_amplitude_gain,
                 amplitude_rates = amplitude_rates,
+                drive = drive,
             )
             for i, weight in enumerate(np.linspace(-1, 1, n_weights))      
         ]
@@ -122,8 +123,8 @@ def exercise6(run_sim = True, run_plot = True):
                 feedback_weights_ipsi = 0,
                 feedback_weights_contra = weight,
                 ws_ref = ws_ref,
-                cpg_amplitude_gain = cpg_amplitude_gain,
                 amplitude_rates = amplitude_rates,
+                drive = drive,
             )
             for i, weight in enumerate(np.linspace(-1, 1, n_weights))      
         ]
