@@ -128,7 +128,7 @@ def exercise9():
     #     compute_metrics='all',
     #     print_metrics=True,
     #     return_network=True,
-    #     feedback_weights_ipsi=-weight,
+    #     feedback_weights_ipsi=weight,
     #     feedback_weights_contra=0,
     #     amplitude_rates = 0,
     #     drive = 0,

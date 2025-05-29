@@ -18,9 +18,19 @@ def exercise5():
     log_path = './logs/exercise5/'
     os.makedirs(log_path, exist_ok=True)
 
+    # Define parameters for the simulation
+    drive = 10
+    cpg_amplitude_gain = np.array(
+        [
+            0.00824, 0.00328, 0.00328, 0.00370, 0.00451,
+            0.00534, 0.00628, 0.00680, 0.00803, 0.01084,
+            0.01115, 0.01149, 0.01655,
+        ])
+    weight = 0
+
     # Create simulation parameters with default values
     pars = SimulationParameters(
-        n_iterations=10001,             # 10 s @ 0.001 s timestep
+        n_iterations=50001,           
         timestep=0.001,
         n_joints=13,
         controller='abstract oscillator',
@@ -29,14 +39,15 @@ def exercise5():
         compute_metrics='all',
         print_metrics=True,
         return_network=True,
-        headless=False,
-        video_record=True,
+        headless = True,
+        video_record=False,
         video_name='exercise5_cpg_swim',
         video_fps=50,
-        phase_lag_body=2*np.pi, 
-        feedback_weights_ipsi=0.25,
-        feedback_weights_contra=-0.25,
-        ws_ref=ws_ref
+        feedback_weights_ipsi=weight,
+        feedback_weights_contra=-weight,
+        ws_ref=ws_ref,
+        drive=drive,
+        cpg_amplitude_gain=cpg_amplitude_gain,
     )
 
     try:

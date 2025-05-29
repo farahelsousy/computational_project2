@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,13 +25,14 @@ def plot_E8(n_weights, n_freqs, logdir):
     # For each twl-value make a matrix with the speed and CoT as a function of frequnecies
     mat_diff_actual = np.zeros((n_freqs,n_weights))
 
+    # Define reference controller
     ref_controller = load_object(logdir+"controller"+str(0))
     if ref_controller.pars.feedback_weights_ipsi != 0:
-        raise Exception("You fucked up, no w=0!")
+        raise Exception("Error: Please include w=0.")
 
 
     mat_diff_entrain = np.linspace(3.5, 10, n_freqs) - np.mean(ref_controller.metrics["neur_frequency"])
-    mat_w = np.linspace(0, 10, n_weights)
+    mat_w = np.linspace(0, 2, n_weights)
 
     title = "entraining_signals"
 
@@ -48,19 +48,18 @@ def plot_E8(n_weights, n_freqs, logdir):
     w_legends = [f"w = {value:.2f}" for value in mat_w]
 
     # Plot the speed and frequency matrices in the same plot. Set x-axis as frequency and y-axis as fwd speed.
-    plt.figure(title, figsize=[10, 10])
+    plt.figure(title, figsize=(15, 8))
     plt.plot(mat_diff_entrain, mat_diff_actual, marker='o', markersize=5, label=w_legends)
 
     # Define plot properties
-    plt.figure(title, figsize=[10, 10])
-    plt.xlabel("Entrainment frequency - reference frequency [Hz]")
-    plt.ylabel("Actual frequency - reference frequency [Hz]")
-    plt.legend(loc='upper right')
+    plt.xlabel("Entrainment freq. - reference freq. [Hz]")
+    plt.ylabel("Actual freq. - reference freq. [Hz]")
+    plt.legend(loc='center left',bbox_to_anchor=(1.0, 0.5),fontsize='small',)
     plt.minorticks_on()
     plt.grid(which='major', color='darkgrey', linestyle='-', linewidth=0.75)
     plt.grid(which='minor', color='gray', linestyle=':', linewidth=0.5)
 
-    save_figures()
+    plt.savefig(os.path.join(logdir, 'entraining_signals.png'), dpi=600, bbox_inches='tight')
 
 def exercise8(run_sim = True, run_plot = True):
 
@@ -68,10 +67,18 @@ def exercise8(run_sim = True, run_plot = True):
     log_path = './logs/exercise8/'  # path for logging the simulation data
     os.makedirs(log_path, exist_ok=True)
 
-    n_freqs = 41
-    n_weights = 11
-    n_iterations=n_iterations = 100001 
+    # Define the parameters for the simulation
+    n_freqs = 51
+    n_weights = 11   
+    n_iterations = 50001 
     timestep=timestep = 0.001
+    drive = 10
+    cpg_amplitude_gain = np.array(
+        [
+            0.00824, 0.00328, 0.00328, 0.00370, 0.00451,
+            0.00534, 0.00628, 0.00680, 0.00803, 0.01084,
+            0.01115, 0.01149, 0.01655,
+        ])
 
     if run_sim:
         pars_list = [
@@ -86,17 +93,18 @@ def exercise8(run_sim = True, run_plot = True):
                     log_path=log_path,
                     return_network=False,
                     print_metrics=False,
-                    feedback_weights_ipsi = -weight,
-                    feedback_weights_contra = weight,
+                    feedback_weights_ipsi = weight,
+                    feedback_weights_contra = -weight,
                     ws_ref = ws_ref,
-                    amplitude_rates = 50,
+                    drive = drive,
+                    cpg_amplitude_gain = cpg_amplitude_gain,
                     entraining_signals = define_entraining_signals(
                         n_iterations = n_iterations,
                         frequency = frequency,
                         timestep=timestep)
                     )
                 for i, frequency in enumerate(np.linspace(3.5, 10, n_freqs))
-                for j, weight in enumerate(np.linspace(0, 4, n_weights))
+                for j, weight in enumerate(np.linspace(0, 2, n_weights))
             ]
         
         # Run the simulation
@@ -106,7 +114,7 @@ def exercise8(run_sim = True, run_plot = True):
         plot_E8(n_weights, n_freqs, log_path)
 
 if __name__ == '__main__':
-    run_sim = True
+    run_sim = False
     run_plot = True
     exercise8(run_sim, run_plot)
 
